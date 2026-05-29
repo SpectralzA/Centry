@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePlaidLink, PlaidLinkOnSuccess, PlaidLinkOptions } from "react-plaid-link";
 import { ShieldCheck, ArrowRight, Building2, Lock, Activity } from "lucide-react";
 
+import { Coffee, ShoppingBag, Car, Plane, Utensils, Receipt, HeartPulse } from "lucide-react";
+
 export interface Subscription {
   id: string;
   merchant: string;
@@ -14,8 +16,42 @@ export interface Subscription {
   nextBillingDate: string;
 }
 
+export interface ExpenseData {
+  id: string;
+  accountId: string;
+  merchant: string;
+  amount: number;
+  date: string;
+  category: string;
+  icon: any;
+  color: string;
+  bg: string;
+  hex: string;
+}
+
+export interface BankAccount {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  color: string;
+}
+
+const mapCategory = (plaidCategory: string) => {
+  const cat = plaidCategory.toUpperCase();
+  if (cat.includes('FOOD') || cat.includes('DINING')) return { category: 'Food & Dining', icon: Utensils, color: 'text-amber-600', bg: 'bg-amber-100', hex: '#D97706' };
+  if (cat.includes('TRAVEL') || cat.includes('AIRLINES')) return { category: 'Travel', icon: Plane, color: 'text-blue-600', bg: 'bg-blue-100', hex: '#2563EB' };
+  if (cat.includes('TRANSPORTATION') || cat.includes('TAXI') || cat.includes('RIDESHARE')) return { category: 'Transportation', icon: Car, color: 'text-slate-600', bg: 'bg-slate-100', hex: '#475569' };
+  if (cat.includes('GROCERY') || cat.includes('SUPERMARKET') || cat.includes('SHOPS') || cat.includes('GENERAL_MERCHANDISE')) return { category: 'Shopping', icon: ShoppingBag, color: 'text-emerald-600', bg: 'bg-emerald-100', hex: '#059669' };
+  if (cat.includes('COFFEE')) return { category: 'Coffee', icon: Coffee, color: 'text-amber-600', bg: 'bg-amber-100', hex: '#D97706' };
+  if (cat.includes('PERSONAL_CARE')) return { category: 'Personal Care', icon: HeartPulse, color: 'text-pink-600', bg: 'bg-pink-100', hex: '#DB2777' };
+  
+  const formattedCat = plaidCategory.replace(/_/g, ' ').replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+  return { category: formattedCat, icon: Receipt, color: 'text-gray-600', bg: 'bg-gray-100', hex: '#4B5563' };
+}
+
 interface RealPlaidLinkProps {
-  onSuccess: (subscriptions: Subscription[]) => void;
+  onSuccess: (data: { subscriptions: Subscription[], expenses: ExpenseData[], accounts: BankAccount[] }) => void;
 }
 
 export function RealPlaidLink({ onSuccess }: RealPlaidLinkProps) {
@@ -49,19 +85,58 @@ export function RealPlaidLink({ onSuccess }: RealPlaidLinkProps) {
       
       const data = await response.json();
       
-      if (data.success) {
-        // In a real scenario, the backend would now fetch /transactions/recurring/get
-        // For this MVP transition, we'll populate the dashboard with our mock data 
-        // to show the UI after a successful real Plaid Link.
-        setTimeout(() => {
-          onSuccess([
-            { id: "1", merchant: "Netflix", amount: 15.49, frequency: "Monthly", status: "FLAGGED", nextBillingDate: "2026-05-15" },
-            { id: "2", merchant: "Spotify Premium", amount: 10.99, frequency: "Monthly", status: "ACTIVE", nextBillingDate: "2026-05-21" },
-            { id: "3", merchant: "Planet Fitness", amount: 24.99, frequency: "Monthly", status: "FLAGGED", nextBillingDate: "2026-05-01" },
-            { id: "4", merchant: "Adobe Creative Cloud", amount: 54.99, frequency: "Monthly", status: "FLAGGED", nextBillingDate: "2026-05-05" },
-            { id: "5", merchant: "Amazon Prime", amount: 139.00, frequency: "Annually", status: "ACTIVE", nextBillingDate: "2026-11-20" }
-          ]);
-        }, 1000);
+      if (data.success && data.access_token) {
+        const syncResponse = await fetch('/api/plaid/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: data.access_token })
+        });
+        
+        const syncData = await syncResponse.json();
+        
+        if (syncData.success) {
+          const accounts: BankAccount[] = syncData.accounts.map((acc: any) => ({
+            id: acc.account_id,
+            name: acc.name,
+            type: acc.type === 'depository' ? 'CHECKING' : (acc.type === 'credit' ? 'CREDIT' : 'INVESTMENT'),
+            balance: acc.balances.current,
+            color: acc.type === 'credit' ? '#94A3B8' : '#2563EB'
+          }));
+
+          const expenses: ExpenseData[] = [];
+          const subscriptions: Subscription[] = [];
+
+          syncData.transactions.forEach((tx: any) => {
+            if (tx.amount > 0) {
+              const isSubscription = tx.personal_finance_category?.primary === 'RENT_AND_UTILITIES' || 
+                                     tx.personal_finance_category?.primary === 'LOAN_PAYMENTS' ||
+                                     ['netflix', 'spotify', 'adobe', 'gym', 'hulu', 'prime', 'apple'].some(k => tx.name.toLowerCase().includes(k));
+                                     
+              if (isSubscription) {
+                subscriptions.push({
+                  id: tx.transaction_id,
+                  merchant: tx.name,
+                  amount: tx.amount,
+                  frequency: "Monthly",
+                  status: (tx.name.toLowerCase().includes('netflix') || tx.name.toLowerCase().includes('adobe')) ? "FLAGGED" : "ACTIVE",
+                  nextBillingDate: new Date(new Date(tx.date).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                });
+              } else {
+                const mappedCat = mapCategory(tx.personal_finance_category?.primary || 'UNCATEGORIZED');
+                expenses.push({
+                  id: tx.transaction_id,
+                  accountId: tx.account_id,
+                  merchant: tx.name,
+                  amount: tx.amount,
+                  date: tx.date,
+                  ...mappedCat
+                });
+              }
+            }
+          });
+
+          onSuccess({ subscriptions, expenses, accounts });
+        }
       }
     } catch (error) {
       console.error("Error exchanging public token", error);

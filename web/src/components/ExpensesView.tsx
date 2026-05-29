@@ -1,43 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Coffee, ShoppingBag, Car, Plane, Utensils, Receipt, PieChart as PieChartIcon, ChevronDown } from "lucide-react";
+import { PieChart as PieChartIcon, ChevronDown, Receipt } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { ExpenseData } from "./RealPlaidLink";
 
-// Extended Mock Expense Data
-const ALL_EXPENSES = [
-  // May 2026
-  { id: "1", merchant: "Starbucks", amount: 6.45, date: "2026-05-12", category: "Food & Drink", icon: Coffee, color: "text-amber-600", bg: "bg-amber-100", hex: "#D97706" },
-  { id: "2", merchant: "Whole Foods", amount: 142.30, date: "2026-05-10", category: "Groceries", icon: ShoppingBag, color: "text-emerald-600", bg: "bg-emerald-100", hex: "#059669" },
-  { id: "3", merchant: "Uber", amount: 24.50, date: "2026-05-09", category: "Transport", icon: Car, color: "text-slate-600", bg: "bg-slate-100", hex: "#475569" },
-  { id: "4", merchant: "Delta Airlines", amount: 450.00, date: "2026-05-05", category: "Travel", icon: Plane, color: "text-blue-600", bg: "bg-blue-100", hex: "#2563EB" },
-  { id: "5", merchant: "Sweetgreen", amount: 18.20, date: "2026-05-04", category: "Food & Drink", icon: Utensils, color: "text-green-600", bg: "bg-green-100", hex: "#16A34A" },
-  
-  // April 2026
-  { id: "6", merchant: "Whole Foods", amount: 110.20, date: "2026-04-28", category: "Groceries", icon: ShoppingBag, color: "text-emerald-600", bg: "bg-emerald-100", hex: "#059669" },
-  { id: "7", merchant: "Shell Gas", amount: 45.00, date: "2026-04-22", category: "Transport", icon: Car, color: "text-slate-600", bg: "bg-slate-100", hex: "#475569" },
-  { id: "8", merchant: "AMC Theaters", amount: 32.50, date: "2026-04-18", category: "Entertainment", icon: Receipt, color: "text-purple-600", bg: "bg-purple-100", hex: "#9333EA" },
-  { id: "9", merchant: "Sweetgreen", amount: 22.10, date: "2026-04-15", category: "Food & Drink", icon: Utensils, color: "text-green-600", bg: "bg-green-100", hex: "#16A34A" },
-  { id: "10", merchant: "Lyft", amount: 18.00, date: "2026-04-02", category: "Transport", icon: Car, color: "text-slate-600", bg: "bg-slate-100", hex: "#475569" },
-  
-  // March 2026
-  { id: "11", merchant: "Trader Joe's", amount: 89.40, date: "2026-03-25", category: "Groceries", icon: ShoppingBag, color: "text-emerald-600", bg: "bg-emerald-100", hex: "#059669" },
-  { id: "12", merchant: "Airbnb", amount: 320.00, date: "2026-03-14", category: "Travel", icon: Plane, color: "text-blue-600", bg: "bg-blue-100", hex: "#2563EB" },
-  { id: "13", merchant: "Starbucks", amount: 12.90, date: "2026-03-10", category: "Food & Drink", icon: Coffee, color: "text-amber-600", bg: "bg-amber-100", hex: "#D97706" },
-];
+export function ExpensesView({ expenses = [] }: { expenses?: ExpenseData[] }) {
+  // Dynamically extract unique months from expenses
+  const months = useMemo(() => {
+    if (!expenses.length) return [{ label: "Current Month", value: "all" }];
+    
+    const uniqueMonths = new Set<string>();
+    expenses.forEach(e => {
+      // e.date is YYYY-MM-DD, extract YYYY-MM
+      const ym = e.date.substring(0, 7);
+      uniqueMonths.add(ym);
+    });
+    
+    return Array.from(uniqueMonths)
+      .sort((a, b) => b.localeCompare(a)) // Sort descending
+      .map(ym => {
+        const [year, month] = ym.split('-');
+        const date = new Date(parseInt(year), parseInt(month) - 1);
+        return {
+          label: date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+          value: ym
+        };
+      });
+  }, [expenses]);
 
-const MONTHS = [
-  { label: "May 2026", value: "2026-05" },
-  { label: "April 2026", value: "2026-04" },
-  { label: "March 2026", value: "2026-03" },
-];
-
-export function ExpensesView() {
-  const [selectedMonth, setSelectedMonth] = useState(MONTHS[0].value);
+  const [selectedMonth, setSelectedMonth] = useState(months[0]?.value || "all");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
-  const filteredExpenses = ALL_EXPENSES.filter(e => e.date.startsWith(selectedMonth));
+  const filteredExpenses = expenses.filter(e => selectedMonth === "all" || e.date.startsWith(selectedMonth));
   const totalExpenses = filteredExpenses.reduce((acc, curr) => acc + curr.amount, 0);
 
   // Aggregate category spend for the selected month
@@ -51,12 +47,12 @@ export function ExpensesView() {
 
   const categoryData = Object.values(categoryTotals).sort((a, b) => b.value - a.value);
 
-  const currentMonthLabel = MONTHS.find(m => m.value === selectedMonth)?.label;
+  const currentMonthLabel = months.find(m => m.value === selectedMonth)?.label || "Current Month";
 
   const handleNextMonth = () => {
-    const currentIndex = MONTHS.findIndex(m => m.value === selectedMonth);
-    if (currentIndex < MONTHS.length - 1) {
-      setSelectedMonth(MONTHS[currentIndex + 1].value);
+    const currentIndex = months.findIndex(m => m.value === selectedMonth);
+    if (currentIndex < months.length - 1) {
+      setSelectedMonth(months[currentIndex + 1].value);
     }
   };
 
@@ -92,7 +88,7 @@ export function ExpensesView() {
                 transition={{ duration: 0.15 }}
                 className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 overflow-hidden z-50"
               >
-                {MONTHS.map(month => (
+                {months.map(month => (
                   <button
                     key={month.value}
                     onClick={() => {
@@ -225,7 +221,7 @@ export function ExpensesView() {
           </div>
           
           {/* Bottom "Load Previous" button for smoother UX */}
-          {MONTHS.findIndex(m => m.value === selectedMonth) < MONTHS.length - 1 && (
+          {months.findIndex(m => m.value === selectedMonth) < months.length - 1 && (
             <div className="border-t border-slate-100 bg-slate-50/50 p-4 text-center">
               <button 
                 onClick={handleNextMonth}

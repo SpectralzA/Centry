@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { RealPlaidLink, Subscription } from "./RealPlaidLink";
+import { RealPlaidLink, Subscription, ExpenseData, BankAccount } from "./RealPlaidLink";
 import { AnalyticsView } from "./AnalyticsView";
 import { ExpensesView } from "./ExpensesView";
 import { AlertCircle, Calendar, CreditCard, DollarSign, ShieldCheck, Mail, CreditCard as CardIcon, CheckCircle2, Activity, PieChart, Receipt } from "lucide-react";
@@ -10,6 +10,8 @@ import { AlertCircle, Calendar, CreditCard, DollarSign, ShieldCheck, Mail, Credi
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<"audit" | "expenses" | "analytics">("audit");
   const [subscriptions, setSubscriptions] = useState<Subscription[] | null>(null);
+  const [expenses, setExpenses] = useState<ExpenseData[] | null>(null);
+  const [accounts, setAccounts] = useState<BankAccount[] | null>(null);
   const [cancelingSub, setCancelingSub] = useState<Subscription | null>(null);
   const [cancelStep, setCancelStep] = useState<number>(0);
 
@@ -31,6 +33,12 @@ export function Dashboard() {
         }, 2000);
       }, 2000);
     }, 2000);
+  };
+
+  const handlePlaidSuccess = (data: { subscriptions: Subscription[], expenses: ExpenseData[], accounts: BankAccount[] }) => {
+    setSubscriptions(data.subscriptions);
+    setExpenses(data.expenses);
+    setAccounts(data.accounts);
   };
 
   return (
@@ -97,7 +105,7 @@ export function Dashboard() {
               exit={{ opacity: 0, scale: 0.95 }}
               className="flex min-h-[60vh] flex-col items-center justify-center text-center"
             >
-              <RealPlaidLink onSuccess={setSubscriptions} />
+              <RealPlaidLink onSuccess={handlePlaidSuccess} />
             </motion.div>
           ) : activeTab === "audit" ? (
             <motion.div
@@ -208,9 +216,9 @@ export function Dashboard() {
               </div>
             </motion.div>
           ) : activeTab === "expenses" ? (
-            <ExpensesView key="expenses" />
+            <ExpensesView key="expenses" expenses={expenses || []} />
           ) : (
-            <AnalyticsView key="analytics" subscriptions={subscriptions || []} />
+            <AnalyticsView key="analytics" subscriptions={subscriptions || []} expenses={expenses || []} accounts={accounts || []} />
           )}
         </AnimatePresence>
       </main>

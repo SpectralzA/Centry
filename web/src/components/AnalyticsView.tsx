@@ -1,6 +1,4 @@
-"use client";
-
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar, ScatterChart, Scatter, ZAxis } from "recharts";
 import { TrendingDown, Landmark, CreditCard, Calendar, ArrowUpRight, DollarSign, PieChart as PieChartIcon, ShieldCheck, AlertCircle, EyeOff, Activity } from "lucide-react";
@@ -22,27 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { Subscription } from "./RealPlaidLink";
-
-const totalSpendingTrend = [
-  { month: "Jan", subscriptions: 185, expenses: 1250 },
-  { month: "Feb", subscriptions: 190, expenses: 1100 },
-  { month: "Mar", subscriptions: 205, expenses: 1400 },
-  { month: "Apr", subscriptions: 175, expenses: 950 },
-  { month: "May", subscriptions: 140, expenses: 1050 }, 
-];
-
-const accountBreakdown = [
-  { name: "Plaid Checking", value: 1800, color: "#3B82F6", type: "Checking" },
-  { name: "Chase Sapphire", value: 3400, color: "#8B5CF6", type: "Credit" },
-  { name: "Amex Gold", value: 1200, color: "#F59E0B", type: "Credit" },
-];
-
-const categorySpend = [
-  { name: "Entertainment", value: 165.48, color: "#F43F5E" },
-  { name: "Software", value: 54.99, color: "#06B6D4" },
-  { name: "Health", value: 24.99, color: "#10B981" },
-];
+import { Subscription, ExpenseData, BankAccount } from "./RealPlaidLink";
 
 function SortableItem(props: { id: string, children: React.ReactNode, colSpan?: string, isEditMode: boolean }) {
   const {
@@ -82,7 +60,7 @@ function SortableItem(props: { id: string, children: React.ReactNode, colSpan?: 
   );
 }
 
-export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscription[] }) {
+export function AnalyticsView({ subscriptions = [], expenses = [], accounts = [] }: { subscriptions?: Subscription[], expenses?: ExpenseData[], accounts?: BankAccount[] }) {
   const [isEditMode, setIsEditMode] = useState(false);
   const [widgets, setWidgets] = useState([
     { id: '1', type: 'TOTAL_SPEND', colSpan: 'lg:col-span-2' },
@@ -113,7 +91,7 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
     }
   };
 
-  // Dynamic Data Calculations based on active subscriptions
+  // Dynamic Data Calculations
   const activeSubs = subscriptions.filter(s => s.status !== "CANCELLED");
   const cancelledSubs = subscriptions.filter(s => s.status === "CANCELLED");
 
@@ -143,11 +121,61 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
   const annualizedSavings = monthlySavings * 12;
 
   const usageCostData = activeSubs.map(sub => ({
-    x: Math.floor(Math.random() * 30), // Simulated usage hours
+    x: Math.floor(Math.random() * 30), // Simulated usage hours for MVP matrix
     y: sub.amount,
     name: sub.merchant,
     fill: sub.status === "FLAGGED" ? "#EF4444" : "#10B981"
   }));
+
+  const accountBreakdown = accounts.map((acc, i) => ({
+    name: acc.name,
+    value: acc.balance,
+    color: acc.color || (i % 2 === 0 ? "#3B82F6" : "#8B5CF6"),
+    type: acc.type
+  }));
+
+  const totalAccountBalance = accountBreakdown.reduce((acc, curr) => acc + curr.value, 0);
+
+  const categoryTotals = expenses.reduce((acc, curr) => {
+    if (!acc[curr.category]) {
+      acc[curr.category] = { name: curr.category, value: 0, color: curr.hex };
+    }
+    acc[curr.category].value += curr.amount;
+    return acc;
+  }, {} as Record<string, { name: string, value: number, color: string }>);
+  
+  const categorySpend = Object.values(categoryTotals).sort((a, b) => b.value - a.value).slice(0, 6); // Top 6 categories
+
+  const recentLargeExpenses = [...expenses]
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 3)
+    .map(exp => ({
+      n: exp.merchant,
+      d: new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      a: exp.amount
+    }));
+
+  const totalSpendingTrend = useMemo(() => {
+    const monthsData: Record<string, { month: string, subscriptions: number, expenses: number }> = {};
+    
+    expenses.forEach(exp => {
+      const ym = exp.date.substring(0, 7);
+      if (!monthsData[ym]) monthsData[ym] = { month: ym, subscriptions: 0, expenses: 0 };
+      monthsData[ym].expenses += exp.amount;
+    });
+
+    // Assume active subscriptions apply to every past month seen in expenses for trend visualization
+    Object.keys(monthsData).forEach(ym => {
+      monthsData[ym].subscriptions = activeSubs.reduce((acc, sub) => acc + sub.amount, 0);
+    });
+
+    return Object.values(monthsData)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map(data => ({
+        ...data,
+        month: new Date(data.month + "-01").toLocaleDateString('en-US', { month: 'short' })
+      }));
+  }, [expenses, activeSubs]);
 
   const renderWidgetContent = (type: string) => {
     switch(type) {
@@ -189,19 +217,19 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
             </div>
             <div className="flex-1 flex flex-col items-center justify-center relative">
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mt-2 z-0">
-                <span className="text-xl font-bold text-slate-900">$6.4k</span><span className="text-[10px] text-slate-500 uppercase tracking-wider">Total</span>
+                <span className="text-xl font-bold text-slate-900">${(totalAccountBalance / 1000).toFixed(1)}k</span><span className="text-[10px] text-slate-500 uppercase tracking-wider">Total</span>
               </div>
               <div className="h-[180px] w-full z-10">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart><Pie data={accountBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">{accountBreakdown.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip wrapperStyle={{ zIndex: 100 }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value) => [`$${value}`, "Balance"]} /></PieChart>
+                  <PieChart><Pie data={accountBreakdown} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value" stroke="none">{accountBreakdown.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip wrapperStyle={{ zIndex: 100 }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`$${value}`, "Balance"]} /></PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="mt-2 flex flex-col gap-2">
+            <div className="mt-2 flex flex-col gap-2 overflow-y-auto max-h-[100px]">
               {accountBreakdown.map((acc) => (
-                <div key={acc.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full" style={{backgroundColor: acc.color}}/><span className="text-slate-700">{acc.name}</span></div>
-                  <span className="font-semibold text-slate-900">${acc.value}</span>
+                <div key={acc.name} className="flex items-center justify-between text-sm shrink-0">
+                  <div className="flex items-center gap-2 truncate pr-2"><div className="h-2 w-2 rounded-full shrink-0" style={{backgroundColor: acc.color}}/><span className="text-slate-700 truncate">{acc.name}</span></div>
+                  <span className="font-semibold text-slate-900 shrink-0">${acc.value.toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -217,11 +245,11 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
             <div className="flex-1 flex flex-col gap-4">
               {upcomingRenewals.map(sub => (
                 <div key={sub.n} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <div>
-                    <p className="font-semibold text-slate-900">{sub.n}</p>
+                  <div className="truncate pr-2">
+                    <p className="font-semibold text-slate-900 truncate">{sub.n}</p>
                     <p className="text-xs text-slate-500">{sub.d}</p>
                   </div>
-                  <span className="font-bold text-slate-900">${sub.a.toFixed(2)}</span>
+                  <span className="font-bold text-slate-900 shrink-0">${sub.a.toFixed(2)}</span>
                 </div>
               ))}
               {upcomingRenewals.length === 0 && (
@@ -235,14 +263,14 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
         return (
           <>
              <div className="mb-6">
-              <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ArrowUpRight className="h-5 w-5 text-rose-500" /> Top 5 Expensive Subs</h3>
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2"><ArrowUpRight className="h-5 w-5 text-rose-500" /> Top Expensive Subs</h3>
             </div>
             <div className="h-[200px] w-full mt-auto">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topExpensiveSubs} layout="vertical" margin={{ top: 0, right: 0, left: 20, bottom: 0 }}>
+                <BarChart data={topExpensiveSubs} layout="vertical" margin={{ top: 0, right: 0, left: 10, bottom: 0 }}>
                   <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 12, fill: '#64748B'}} />
-                  <Tooltip cursor={{fill: '#F1F5F9'}} formatter={(val) => `$${val}`} />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#64748B'}} width={80} />
+                  <Tooltip cursor={{fill: '#F1F5F9'}} formatter={(val: any) => `$${val}`} />
                   <Bar dataKey="cost" fill="#F43F5E" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
@@ -281,11 +309,11 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
               <h3 className="font-semibold text-rose-900 flex items-center gap-2"><EyeOff className="h-5 w-5 text-rose-600" /> Phantom Subscriptions</h3>
               <p className="text-sm text-rose-700 mt-2">You are paying for these but haven't used them in 30+ days.</p>
             </div>
-            <div className="space-y-3 mt-4">
+            <div className="space-y-3 mt-4 overflow-y-auto max-h-[150px] pr-2">
                {phantomSubs.map(sub => (
-                 <div key={sub.n} className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-100 shadow-sm">
-                   <span className="font-medium text-slate-900">{sub.n}</span>
-                   <span className="font-bold text-rose-600">${sub.a.toFixed(2)}</span>
+                 <div key={sub.n} className="flex justify-between items-center bg-white p-3 rounded-lg border border-rose-100 shadow-sm shrink-0">
+                   <span className="font-medium text-slate-900 truncate pr-2">{sub.n}</span>
+                   <span className="font-bold text-rose-600 shrink-0">${sub.a.toFixed(2)}</span>
                  </div>
                ))}
                {phantomSubs.length === 0 && (
@@ -299,12 +327,12 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
         return (
           <>
             <div className="mb-6">
-              <h3 className="font-semibold text-slate-900 flex items-center gap-2"><PieChartIcon className="h-5 w-5 text-cyan-500" /> Category Spend</h3>
+              <h3 className="font-semibold text-slate-900 flex items-center gap-2"><PieChartIcon className="h-5 w-5 text-cyan-500" /> Top Category Spend</h3>
             </div>
             <div className="flex-1 flex flex-col items-center justify-center">
               <div className="h-[180px] w-full z-10">
                 <ResponsiveContainer width="100%" height="100%">
-                  <PieChart><Pie data={categorySpend} cx="50%" cy="50%" outerRadius={70} dataKey="value" stroke="#fff" strokeWidth={2}>{categorySpend.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip wrapperStyle={{ zIndex: 100 }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value) => [`$${value}`, "Spend"]} /></PieChart>
+                  <PieChart><Pie data={categorySpend} cx="50%" cy="50%" outerRadius={70} dataKey="value" stroke="#fff" strokeWidth={2}>{categorySpend.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}</Pie><Tooltip wrapperStyle={{ zIndex: 100 }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Spend"]} /></PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -318,15 +346,18 @@ export function AnalyticsView({ subscriptions = [] }: { subscriptions?: Subscrip
               <h3 className="font-semibold text-slate-900 flex items-center gap-2"><AlertCircle className="h-5 w-5 text-amber-500" /> Recent Large Expenses</h3>
             </div>
             <div className="flex-1 flex flex-col gap-4">
-              {[ {n: 'Delta Airlines', d: 'Yesterday', a: 450.00}, {n: 'Apple Store', d: 'May 10', a: 1200.00}, {n: 'Equinox', d: 'May 1', a: 250.00} ].map(sub => (
+              {recentLargeExpenses.map(sub => (
                 <div key={sub.n} className="flex items-center justify-between border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                  <div>
-                    <p className="font-semibold text-slate-900">{sub.n}</p>
+                  <div className="truncate pr-2">
+                    <p className="font-semibold text-slate-900 truncate">{sub.n}</p>
                     <p className="text-xs text-slate-500">{sub.d}</p>
                   </div>
-                  <span className="font-bold text-slate-900">${sub.a}</span>
+                  <span className="font-bold text-slate-900 shrink-0">${sub.a.toFixed(2)}</span>
                 </div>
               ))}
+              {recentLargeExpenses.length === 0 && (
+                 <div className="text-sm text-slate-500 text-center py-4">No recent large expenses found.</div>
+              )}
             </div>
           </>
         );
