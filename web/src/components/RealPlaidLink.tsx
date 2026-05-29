@@ -72,6 +72,12 @@ export function RealPlaidLink({ onSuccess }: RealPlaidLinkProps) {
   const config: PlaidLinkOptions = {
     token: linkToken!,
     onSuccess: handleOnSuccess,
+    onExit: (error, metadata) => {
+      if (error) {
+        alert(`Plaid Error: ${error.error_message} (${error.error_code})`);
+        console.error("Plaid Exit Error:", error, metadata);
+      }
+    }
   };
 
   const { open, ready } = usePlaidLink(config);
