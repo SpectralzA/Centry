@@ -144,7 +144,7 @@ export function ExpensesView() {
                       <Tooltip 
                         wrapperStyle={{ zIndex: 100 }}
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number) => [`$${value.toFixed(2)}`, "Spent"]} 
+                        formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Spent"]} 
                       />
                     </PieChart>
                   </ResponsiveContainer>
