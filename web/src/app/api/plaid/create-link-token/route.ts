@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
     const requestArgs: any = {
       user: {
-        client_user_id: 'user-id-mock-123',
+        client_user_id: crypto.randomUUID(),
       },
       client_name: 'Centry',
       products: [Products.Transactions],
