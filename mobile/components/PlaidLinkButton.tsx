@@ -22,6 +22,8 @@ export function PlaidLinkButton({ onSuccess, style, textStyle }: PlaidLinkButton
       // 1. Fetch link_token from your Next.js backend
       const response = await fetch(`${API_URL}/api/plaid/create-link-token`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: 'ios' })
       });
       
       if (!response.ok) {

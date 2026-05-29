@@ -16,7 +16,10 @@ const plaidClient = new PlaidApi(configuration);
 export async function POST(request: Request) {
   try {
     // In a real app, you would verify the user session and use their distinct user_id
-    const requestArgs = {
+    const body = await request.json().catch(() => ({}));
+    const platform = body.platform || 'web';
+
+    const requestArgs: any = {
       user: {
         client_user_id: 'user-id-mock-123',
       },
@@ -24,8 +27,12 @@ export async function POST(request: Request) {
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: 'en',
-      redirect_uri: 'https://centryus.com/oauth',
     };
+
+    // Only strictly require the OAuth redirect URI for iOS mobile devices
+    if (platform === 'ios') {
+      requestArgs.redirect_uri = 'https://centryus.com/oauth';
+    }
 
     const createTokenResponse = await plaidClient.linkTokenCreate(requestArgs);
     
