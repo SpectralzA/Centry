@@ -24,6 +24,7 @@ export async function POST(request: Request) {
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: 'en',
+      redirect_uri: 'https://centryus.com/oauth',
     };
 
     const createTokenResponse = await plaidClient.linkTokenCreate(requestArgs);

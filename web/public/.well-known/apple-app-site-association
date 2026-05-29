@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "25JQ59QQ5D.com.centryus.app",
+        "paths": ["/oauth", "/oauth/*"]
+      }
+    ]
+  }
+}

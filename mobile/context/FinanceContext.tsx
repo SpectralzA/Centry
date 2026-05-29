@@ -128,7 +128,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/plaid/sync', {
+      const response = await fetch('https://centryus.com/api/plaid/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ access_token: accessToken })
@@ -226,7 +226,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const connectBank = async (publicToken: string) => {
     try {
-      const response = await fetch('http://localhost:3000/api/plaid/exchange-public-token', {
+      const response = await fetch('https://centryus.com/api/plaid/exchange-public-token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ public_token: publicToken })

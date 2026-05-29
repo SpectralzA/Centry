@@ -8,8 +8,8 @@ interface PlaidLinkButtonProps {
 }
 
 // In a real app, this should be configurable via env vars.
-// We use localhost:3000 because the Next.js app will be running locally.
-const API_URL = 'http://localhost:3000';
+// Point to the live production Vercel backend
+const API_URL = 'https://centryus.com';
 
 export function PlaidLinkButton({ onSuccess, style, textStyle }: PlaidLinkButtonProps) {
   const [isInitializing, setIsInitializing] = useState(false);
@@ -50,7 +50,7 @@ export function PlaidLinkButton({ onSuccess, style, textStyle }: PlaidLinkButton
       });
     } catch (err: any) {
       console.error('Error opening Plaid Link:', err);
-      Alert.alert('Connection Error', 'Could not connect to the bank linking service. Make sure the web backend is running on localhost:3000.');
+      Alert.alert('Connection Error', 'Could not connect to the bank linking service. Make sure the backend is reachable at centryus.com.');
     } finally {
       setIsInitializing(false);
       setIsReady(false); // Reset ready state after opening
