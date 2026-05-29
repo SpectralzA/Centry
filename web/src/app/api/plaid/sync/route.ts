@@ -27,6 +27,9 @@ export async function POST(request: Request) {
     });
     const accounts = accountsResponse.data.accounts;
 
+    // Small delay to allow Plaid to begin initial extraction for newly linked items
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     // Fetch transactions using transactionsSync (initial sync)
     let addedTransactions: any[] = [];
     let hasMore = true;
@@ -42,6 +45,30 @@ export async function POST(request: Request) {
       addedTransactions = addedTransactions.concat(transactionsResponse.data.added);
       hasMore = transactionsResponse.data.has_more;
       cursor = transactionsResponse.data.next_cursor;
+    }
+
+    // Fallback: if transactionsSync returns nothing (common for brand new links that take a moment),
+    // try fetching via transactionsGet for the last 90 days.
+    if (addedTransactions.length === 0) {
+      try {
+        const endDate = new Date().toISOString().split('T')[0];
+        const startDate = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        
+        const response = await plaidClient.transactionsGet({
+          access_token: access_token,
+          start_date: startDate,
+          end_date: endDate,
+          options: {
+            count: 200,
+            offset: 0
+          }
+        });
+        
+        addedTransactions = response.data.transactions;
+      } catch (fallbackError: any) {
+        console.error('Fallback transactionsGet failed:', fallbackError.response?.data || fallbackError.message);
+        // It might throw PRODUCT_NOT_READY, which is normal.
+      }
     }
 
     // Sort transactions by date descending
